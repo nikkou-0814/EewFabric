@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "id": "eewfabric",
+  "version": "${version}",
+  "name": "eewfabric",
+  "description": "",
+  "authors": [],
+  "contact": {},
+  "license": "All-Rights-Reserved",
+  "icon": "assets/eewfabric/icon.png",
+  "environment": "server",
+  "entrypoints": {
+    "main": [
+      "nagoya.nikkou.eewfabric"
+    ]
+  },
+  "mixins": [
+    "eewfabric.mixins.json",
+    {
+      "config": "eewfabric.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric": "*",
+    "minecraft": "${minecraft_version}"
+  }
+}

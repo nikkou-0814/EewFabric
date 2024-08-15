@@ -16,7 +16,7 @@
   "mixins": [
     "eewfabric.mixins.json",
     {
-      "config": "eewfabric.client.mixins.json",
+      "config": "eewfabric.mixins.json",
       "environment": "client"
     }
   ],

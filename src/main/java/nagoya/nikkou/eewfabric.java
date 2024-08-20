@@ -33,13 +33,17 @@ public class eewfabric implements ModInitializer {
     private void onServerStopping(MinecraftServer server) {
         closeWebSocket(eewWebSocket, "EEW");
         closeWebSocket(p2pWebSocket, "P2P");
+        try {
+            Thread.sleep(5000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     private void closeWebSocket(WebSocket webSocket, String type) {
         if (webSocket != null) {
             webSocket.close(1000, "Server stopping");
-            System.out.println(type + " Socketがサーバー停止のためにクローズされました。");
-            broadcastToChat(type + " Socketがサーバー停止のためにクローズされました。");
+            System.out.println(type + " Socket closed due to server stopping");
         }
     }
 
@@ -60,8 +64,8 @@ public class eewfabric implements ModInitializer {
     private class EEWWebSocketListener extends WebSocketListener {
         @Override
         public void onOpen(WebSocket webSocket, Response response) {
-            System.out.println("EEW Socketが接続されました！");
-            broadcastToChat("EEW Socketが接続されました！");
+            System.out.println("Wolfx WebSocket connected!");
+            broadcastToChat("EEW WebSocketが接続されました！");
         }
 
         @Override
@@ -98,20 +102,24 @@ public class eewfabric implements ModInitializer {
     private class P2PWebSocketListener extends WebSocketListener {
         @Override
         public void onOpen(WebSocket webSocket, Response response) {
-            System.out.println("P2P Socketが接続されました！");
-            broadcastToChat("P2P Socketが接続されました！");
+            System.out.println("P2PQuake WebSocket connected!");
+            broadcastToChat("P2PQuake WebSocketが接続されました！");
         }
 
         @Override
         public void onMessage(WebSocket webSocket, String text) {
             System.out.println("Received P2P message: " + text);
             JSONObject jsonObject = new JSONObject(text);
-            String type = jsonObject.getJSONObject("issue").getString("type");
-            String message = createP2PMessage(jsonObject, type);
-            if (message != null) {
-                broadcastToChat(message);
+
+            if (jsonObject.has("code") && jsonObject.getInt("code") == 551) {
+                String type = jsonObject.getJSONObject("issue").getString("type");
+                String message = createP2PMessage(jsonObject, type);
+                if (message != null) {
+                    broadcastToChat(message);
+                }
             }
         }
+
 
         @Override
         public void onClosing(WebSocket webSocket, int code, String reason) {
@@ -135,35 +143,50 @@ public class eewfabric implements ModInitializer {
     }
 
     private void handleWebSocketFailure(WebSocket webSocket, Throwable t, String type) {
-        System.err.println(type + " Socketエラー: " + t.getMessage());
-        broadcastToChat(type + " Socketエラー: " + t.getMessage());
-        reconnectWebSocket(type + " Socketエラー: " + t.getMessage(), type);
+        System.err.println(type + "  WebSocket error: " + t.getMessage());
+        broadcastToChat(type + " WebSocketエラー: " + t.getMessage());
+        reconnectWebSocket(type + " WebSocketエラー: " + t.getMessage(), type);
     }
 
     private void handleWebSocketClosed(WebSocket webSocket, int code, String reason, String type) {
-        System.out.println(type + " Socketがクローズされました: " + reason);
+        if (server == null) {
+            System.out.println(type + " WebSocket closed. Not reconnecting");
+            return;
+        }
+
+        System.out.println(type + " Socket closed: " + reason);
         broadcastToChat(type + " Socketがクローズされました: " + reason);
-        reconnectWebSocket(type + " Socketがクローズされました: " + reason, type);
     }
+
 
     private String createEEWMessage(JSONObject jsonObject) {
         StringBuilder message = new StringBuilder();
-        message.append(jsonObject.getString("Title")).append(" 第").append(jsonObject.getInt("Serial")).append("報\n\n");
+        String originTime = jsonObject.getString("OriginTime");
+        LocalDateTime dateTime = LocalDateTime.parse(originTime, DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss"));
+
+        String title = jsonObject.getString("Title");
+        if (jsonObject.getBoolean("isCancel")) {
+            title += " (キャンセル)";
+        }
+        if (jsonObject.getBoolean("isFinal")) {
+            title += " (最終報)";
+        }
+        if (jsonObject.getBoolean("isTraining")) {
+            title += " (訓練報)";
+        }
+        if (jsonObject.getBoolean("isAssumption")) {
+            title += "(仮定震源要素)";
+        }
+        message.append(title).append(" 第").append(jsonObject.getInt("Serial")).append("報\n\n");
         message.append("震源地: ").append(jsonObject.getString("Hypocenter")).append("\n");
         message.append("推定最大震度: ").append(jsonObject.getString("MaxIntensity")).append("\n");
         message.append("マグニチュード: ").append(jsonObject.getDouble("Magunitude")).append("\n");
         message.append("深さ: ").append(jsonObject.getInt("Depth")).append("km\n");
-        message.append("発生時刻: ").append(jsonObject.getString("OriginTime")).append("\n");
-        message.append("海域地震: ").append(jsonObject.getBoolean("isSea") ? "はい" : "いいえ").append("\n");
-        message.append("仮定震源要素: ").append(jsonObject.getBoolean("isAssumption") ? "はい" : "いいえ").append("\n");
-        message.append("キャンセル: ").append(jsonObject.getBoolean("isCancel") ? "はい" : "いいえ").append("\n");
-        message.append("最終報: ").append(jsonObject.getBoolean("isFinal") ? "はい" : "いいえ").append("\n");
-        message.append("警報: ").append(jsonObject.getBoolean("isWarn") ? "発表中" : "発表なし").append("\n");
-        message.append("訓練報: ").append(jsonObject.getBoolean("isTraining") ? "はい" : "いいえ").append("\n");
-        message.append("\n気象庁原電文: ").append(jsonObject.getString("OriginalText"));
+        message.append("発生時刻: ").append(dateTime.format(DateTimeFormatter.ofPattern("HH時mm分ss秒")));
 
         return message.toString();
     }
+
 
     private String createP2PMessage(JSONObject jsonObject, String type) {
         switch (type) {
@@ -173,6 +196,8 @@ public class eewfabric implements ModInitializer {
                 return createDetailScaleMessage(jsonObject);
             case "Destination":
                 return createDestinationMessage(jsonObject);
+            case "Foreign":
+                return createForeignMessage(jsonObject);
             default:
                 System.out.println("Unhandled message type: " + type);
                 return null;
@@ -240,6 +265,23 @@ public class eewfabric implements ModInitializer {
         return message.toString();
     }
 
+    private String createForeignMessage(JSONObject jsonObject) {
+        StringBuilder message = new StringBuilder();
+        message.append("遠地地震に関する情報\n\n");
+
+        String time = jsonObject.getJSONObject("earthquake").getString("time");
+        LocalDateTime dateTime = LocalDateTime.parse(time, DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss"));
+        String domesticTsunami = jsonObject.getJSONObject("earthquake").getString("domesticTsunami");
+        JSONObject hypocenter = jsonObject.getJSONObject("earthquake").getJSONObject("hypocenter");
+        String hypocenterName = hypocenter.getString("name");
+        message.append(dateTime.format(DateTimeFormatter.ofPattern("dd日 HH時mm分"))).append("頃、海外で強い地震がありました。").append("\n").append(convertTsunamiInfo(domesticTsunami)).append("\n\n");
+
+        message.append("震源地: ").append(hypocenterName.isEmpty() ? "不明" : hypocenterName).append("\n");
+        message.append("マグニチュード: ").append("M").append(hypocenter.getDouble("magnitude"));
+
+        return message.toString();
+    }
+
     private String convertScale(int scale) {
         switch (scale) {
             case 10: return "1";
@@ -269,9 +311,9 @@ public class eewfabric implements ModInitializer {
 
     private void reconnectWebSocket(String reason, String type) {
         try {
-            Thread.sleep(5000); // 5秒待つ
             System.out.println(type + " Socketが切断されました。5秒後に再接続します:" + reason);
             broadcastToChat(type + " Socketが切断されました。5秒後に再接続します:" + reason);
+            Thread.sleep(5000);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }

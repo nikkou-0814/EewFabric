@@ -179,11 +179,19 @@ public class eewfabric implements ModInitializer {
             title += " (仮定震源要素)";
         }
 
+        String formattedDepth = "深さ: ";
+        int depth = jsonObject.getInt("Depth");
+        if (depth == 0) {
+            formattedDepth += "ごく浅い";
+        } else {
+            formattedDepth += depth + "km";
+        }
+
         message.append(title).append("\n\n");
         message.append("震源地: ").append(jsonObject.getString("Hypocenter")).append("\n");
         message.append("推定最大震度: ").append(jsonObject.getString("MaxIntensity")).append("\n");
         message.append("マグニチュード: ").append(jsonObject.getDouble("Magnitude")).append("\n");
-        message.append("深さ: ").append(jsonObject.getInt("Depth")).append("km\n");
+        message.append(formattedDepth).append("\n");
         message.append("発生時刻: ").append(dateTime.format(DateTimeFormatter.ofPattern("HH時mm分ss秒")));
 
         return message.toString();
@@ -229,6 +237,15 @@ public class eewfabric implements ModInitializer {
 
     private String createDetailScaleMessage(JSONObject jsonObject) {
         StringBuilder message = new StringBuilder();
+
+        String formattedDepth = "深さ: ";
+        int depth = jsonObject.getInt("Depth");
+        if (depth == 0) {
+            formattedDepth += "ごく浅い";
+        } else {
+            formattedDepth += depth + "km";
+        }
+
         message.append("震源・震度に関する情報\n\n");
 
         String time = jsonObject.getJSONObject("earthquake").getString("time");
@@ -242,13 +259,22 @@ public class eewfabric implements ModInitializer {
 
         JSONObject hypocenter = jsonObject.getJSONObject("earthquake").getJSONObject("hypocenter");
         message.append("マグニチュード: ").append("M").append(hypocenter.getDouble("magnitude")).append("\n");
-        message.append("深さ: ").append(hypocenter.getInt("depth")).append("km");
+        message.append(formattedDepth);
 
         return message.toString();
     }
 
     private String createDestinationMessage(JSONObject jsonObject) {
         StringBuilder message = new StringBuilder();
+
+        String formattedDepth = "深さ: ";
+        int depth = jsonObject.getInt("Depth");
+        if (depth == 0) {
+            formattedDepth += "ごく浅い";
+        } else {
+            formattedDepth += depth + "km";
+        }
+
         message.append("震源に関する情報\n\n");
 
         String time = jsonObject.getJSONObject("earthquake").getString("time");
@@ -261,7 +287,7 @@ public class eewfabric implements ModInitializer {
         message.append("震源地: ").append(hypocenterName.isEmpty() ? "不明" : hypocenterName).append("\n");
 
         message.append("マグニチュード: ").append("M").append(hypocenter.getDouble("magnitude")).append("\n");
-        message.append("深さ: ").append(hypocenter.getInt("depth")).append("km");
+        message.append(formattedDepth);
 
         return message.toString();
     }

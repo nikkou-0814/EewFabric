@@ -145,7 +145,7 @@ public class eewfabric implements ModInitializer {
     private void handleWebSocketFailure(WebSocket webSocket, Throwable t, String type) {
         System.err.println(type + "  WebSocket error: " + t.getMessage());
         broadcastToChat(type + " WebSocketエラー: " + t.getMessage());
-        reconnectWebSocket(type + " WebSocketエラー: " + t.getMessage(), type);
+        reconnectWebSocket(type + " WebSocket Error: " + t.getMessage(), type);
     }
 
     private void handleWebSocketClosed(WebSocket webSocket, int code, String reason, String type) {
@@ -158,13 +158,14 @@ public class eewfabric implements ModInitializer {
         broadcastToChat(type + " Socketがクローズされました: " + reason);
     }
 
-
     private String createEEWMessage(JSONObject jsonObject) {
         StringBuilder message = new StringBuilder();
         String originTime = jsonObject.getString("OriginTime");
         LocalDateTime dateTime = LocalDateTime.parse(originTime, DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss"));
 
         String title = jsonObject.getString("Title");
+        title += " 第" + jsonObject.getInt("Serial") + "報";
+
         if (jsonObject.getBoolean("isCancel")) {
             title += " (キャンセル)";
         }
@@ -175,18 +176,18 @@ public class eewfabric implements ModInitializer {
             title += " (訓練報)";
         }
         if (jsonObject.getBoolean("isAssumption")) {
-            title += "(仮定震源要素)";
+            title += " (仮定震源要素)";
         }
-        message.append(title).append(" 第").append(jsonObject.getInt("Serial")).append("報\n\n");
+
+        message.append(title).append("\n\n");
         message.append("震源地: ").append(jsonObject.getString("Hypocenter")).append("\n");
         message.append("推定最大震度: ").append(jsonObject.getString("MaxIntensity")).append("\n");
-        message.append("マグニチュード: ").append(jsonObject.getDouble("Magunitude")).append("\n");
+        message.append("マグニチュード: ").append(jsonObject.getDouble("Magnitude")).append("\n");
         message.append("深さ: ").append(jsonObject.getInt("Depth")).append("km\n");
         message.append("発生時刻: ").append(dateTime.format(DateTimeFormatter.ofPattern("HH時mm分ss秒")));
 
         return message.toString();
     }
-
 
     private String createP2PMessage(JSONObject jsonObject, String type) {
         switch (type) {
@@ -311,7 +312,7 @@ public class eewfabric implements ModInitializer {
 
     private void reconnectWebSocket(String reason, String type) {
         try {
-            System.out.println(type + " Socketが切断されました。5秒後に再接続します:" + reason);
+            System.out.println(type + " Socket disconnected. Reconnect in 5 seconds:" + reason);
             broadcastToChat(type + " Socketが切断されました。5秒後に再接続します:" + reason);
             Thread.sleep(5000);
         } catch (InterruptedException e) {

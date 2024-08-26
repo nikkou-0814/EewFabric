@@ -21,7 +21,6 @@ public class eewfabric implements ModInitializer {
     public void onInitialize() {
         client = new OkHttpClient();
         ServerLifecycleEvents.SERVER_STARTING.register(this::onServerStarting);
-        ServerLifecycleEvents.SERVER_STOPPING.register(this::onServerStopping);
     }
 
     private void onServerStarting(MinecraftServer server) {
@@ -179,19 +178,11 @@ public class eewfabric implements ModInitializer {
             title += " (仮定震源要素)";
         }
 
-        String formattedDepth = "深さ: ";
-        int depth = jsonObject.getInt("Depth");
-        if (depth == 0) {
-            formattedDepth += "ごく浅い";
-        } else {
-            formattedDepth += depth + "km";
-        }
-
         message.append(title).append("\n\n");
         message.append("震源地: ").append(jsonObject.getString("Hypocenter")).append("\n");
         message.append("推定最大震度: ").append(jsonObject.getString("MaxIntensity")).append("\n");
         message.append("マグニチュード: ").append(jsonObject.getDouble("Magnitude")).append("\n");
-        message.append(formattedDepth).append("\n");
+        message.append("深さ: ").append(jsonObject.getInt("Depth")).append("km\n");
         message.append("発生時刻: ").append(dateTime.format(DateTimeFormatter.ofPattern("HH時mm分ss秒")));
 
         return message.toString();
@@ -237,15 +228,6 @@ public class eewfabric implements ModInitializer {
 
     private String createDetailScaleMessage(JSONObject jsonObject) {
         StringBuilder message = new StringBuilder();
-
-        String formattedDepth = "深さ: ";
-        int depth = jsonObject.getInt("Depth");
-        if (depth == 0) {
-            formattedDepth += "ごく浅い";
-        } else {
-            formattedDepth += depth + "km";
-        }
-
         message.append("震源・震度に関する情報\n\n");
 
         String time = jsonObject.getJSONObject("earthquake").getString("time");
@@ -253,6 +235,13 @@ public class eewfabric implements ModInitializer {
         int maxScale = jsonObject.getJSONObject("earthquake").getInt("maxScale");
         String domesticTsunami = jsonObject.getJSONObject("earthquake").getString("domesticTsunami");
         String hypocenterName = jsonObject.getJSONObject("earthquake").getJSONObject("hypocenter").getString("name");
+        String formattedDepth = "深さ: ";
+        int depth = jsonObject.getJSONObject("earthquake").getJSONObject("hypocenter").getInt("depth");
+        if (depth == 0) {
+            formattedDepth += "ごく浅い";
+        } else {
+            formattedDepth += depth + "km";
+        }
         message.append(dateTime.format(DateTimeFormatter.ofPattern("dd日 HH時mm分"))).append("頃").append("\n").append(hypocenterName.isEmpty() ? "不明" : hypocenterName).append("で最大震度").append(convertScale(maxScale)).append("を観測する地震が発生しました").append("\n").append(convertTsunamiInfo(domesticTsunami)).append("\n\n");
 
         message.append("震源地: ").append(hypocenterName.isEmpty() ? "不明" : hypocenterName).append("\n");
@@ -266,15 +255,6 @@ public class eewfabric implements ModInitializer {
 
     private String createDestinationMessage(JSONObject jsonObject) {
         StringBuilder message = new StringBuilder();
-
-        String formattedDepth = "深さ: ";
-        int depth = jsonObject.getInt("Depth");
-        if (depth == 0) {
-            formattedDepth += "ごく浅い";
-        } else {
-            formattedDepth += depth + "km";
-        }
-
         message.append("震源に関する情報\n\n");
 
         String time = jsonObject.getJSONObject("earthquake").getString("time");
@@ -282,6 +262,13 @@ public class eewfabric implements ModInitializer {
         String domesticTsunami = jsonObject.getJSONObject("earthquake").getString("domesticTsunami");
         JSONObject hypocenter = jsonObject.getJSONObject("earthquake").getJSONObject("hypocenter");
         String hypocenterName = hypocenter.getString("name");
+        String formattedDepth = "深さ: ";
+        int depth = jsonObject.getJSONObject("earthquake").getJSONObject("hypocenter").getInt("depth");
+        if (depth == 0) {
+            formattedDepth += "ごく浅い";
+        } else {
+            formattedDepth += depth + "km";
+        }
         message.append(dateTime.format(DateTimeFormatter.ofPattern("dd日 HH時mm分"))).append("頃、").append(hypocenterName.isEmpty() ? "不明" : hypocenterName).append("で地震がありました。").append("\n").append(convertTsunamiInfo(domesticTsunami)).append("\n\n");
 
         message.append("震源地: ").append(hypocenterName.isEmpty() ? "不明" : hypocenterName).append("\n");

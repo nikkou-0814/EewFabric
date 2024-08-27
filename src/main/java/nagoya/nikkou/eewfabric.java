@@ -181,7 +181,7 @@ public class eewfabric implements ModInitializer {
         message.append(title).append("\n\n");
         message.append("震源地: ").append(jsonObject.getString("Hypocenter")).append("\n");
         message.append("推定最大震度: ").append(jsonObject.getString("MaxIntensity")).append("\n");
-        message.append("マグニチュード: ").append(jsonObject.getDouble("Magnitude")).append("\n");
+        message.append("マグニチュード: ").append(jsonObject.getDouble("Magunitude")).append("\n");
         message.append("深さ: ").append(jsonObject.getInt("Depth")).append("km\n");
         message.append("発生時刻: ").append(dateTime.format(DateTimeFormatter.ofPattern("HH時mm分ss秒")));
 

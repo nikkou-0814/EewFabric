@@ -325,8 +325,8 @@ public class eewfabric implements ModInitializer {
 
     private void reconnectWebSocket(String reason, String type) {
         try {
-            System.out.println(type + " Socket disconnected. Reconnect in 5 seconds:" + reason);
-            broadcastToChat(type + " Socketが切断されました。5秒後に再接続します:" + reason);
+            System.out.println(type + " WebSocket disconnected. Reconnect in 5 seconds:" + reason);
+            broadcastToChat(type + " WebSocketが切断されました。5秒後に再接続します:" + reason);
             Thread.sleep(5000);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();

@@ -119,7 +119,6 @@ public class eewfabric implements ModInitializer {
             }
         }
 
-
         @Override
         public void onClosing(WebSocket webSocket, int code, String reason) {
             handleWebSocketClosing(webSocket, code, reason, "P2P");
@@ -138,7 +137,7 @@ public class eewfabric implements ModInitializer {
 
     private void handleWebSocketClosing(WebSocket webSocket, int code, String reason, String type) {
         System.out.println(type + " WebSocket connection closing: " + reason);
-        broadcastToChat(type + " WebSocket connection closing: " + reason);
+        broadcastToChat(type + " WebSocketがクローズされました: " + reason);
     }
 
     private void handleWebSocketFailure(WebSocket webSocket, Throwable t, String type) {
@@ -153,8 +152,8 @@ public class eewfabric implements ModInitializer {
             return;
         }
 
-        System.out.println(type + " Socket closed: " + reason);
-        broadcastToChat(type + " Socketがクローズされました: " + reason);
+        System.out.println(type + " WebSocket closed: " + reason);
+        broadcastToChat(type + " WebSocketがクローズされました: " + reason);
     }
 
     private String createEEWMessage(JSONObject jsonObject) {

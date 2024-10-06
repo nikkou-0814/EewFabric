@@ -9,6 +9,7 @@ import org.json.JSONObject;
 import org.json.JSONArray;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.concurrent.*;
 
 public class eewfabric implements ModInitializer {
 
@@ -16,11 +17,13 @@ public class eewfabric implements ModInitializer {
     private MinecraftServer server;
     private WebSocket eewWebSocket;
     private WebSocket p2pWebSocket;
+    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
     @Override
     public void onInitialize() {
         client = new OkHttpClient();
         ServerLifecycleEvents.SERVER_STARTING.register(this::onServerStarting);
+        ServerLifecycleEvents.SERVER_STOPPING.register(this::onServerStopping);
     }
 
     private void onServerStarting(MinecraftServer server) {
@@ -32,11 +35,7 @@ public class eewfabric implements ModInitializer {
     private void onServerStopping(MinecraftServer server) {
         closeWebSocket(eewWebSocket, "EEW");
         closeWebSocket(p2pWebSocket, "P2P");
-        try {
-            Thread.sleep(5000);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        scheduler.shutdown();
     }
 
     private void closeWebSocket(WebSocket webSocket, String type) {
@@ -141,9 +140,9 @@ public class eewfabric implements ModInitializer {
     }
 
     private void handleWebSocketFailure(WebSocket webSocket, Throwable t, String type) {
-        System.err.println(type + "  WebSocket error: " + t.getMessage());
+        System.err.println(type + " WebSocket error: " + t.getMessage());
         broadcastToChat(type + " WebSocketエラー: " + t.getMessage());
-        reconnectWebSocket(type + " WebSocket Error: " + t.getMessage(), type);
+        reconnectWebSocket("WebSocket Error: " + t.getMessage(), type);
     }
 
     private void handleWebSocketClosed(WebSocket webSocket, int code, String reason, String type) {
@@ -211,9 +210,14 @@ public class eewfabric implements ModInitializer {
         LocalDateTime dateTime = LocalDateTime.parse(time, DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss"));
         int maxScale = jsonObject.getJSONObject("earthquake").getInt("maxScale");
         String domesticTsunami = jsonObject.getJSONObject("earthquake").getString("domesticTsunami");
-        message.append(dateTime.format(DateTimeFormatter.ofPattern("dd日 HH時mm分"))).append("頃").append("\n").append("最大震度").append(convertScale(maxScale)).append("を観測する地震が発生しました").append("\n").append(convertTsunamiInfo(domesticTsunami)).append("\n\n");
+        message.append(dateTime.format(DateTimeFormatter.ofPattern("dd日 HH時mm分"))).append("頃")
+                .append("\n")
+                .append("最大震度").append(convertScale(maxScale)).append("を観測する地震が発生しました")
+                .append("\n")
+                .append(convertTsunamiInfo(domesticTsunami))
+                .append("\n\n");
 
-        message.append("\n震度情報:\n");
+        message.append("震度情報:\n");
         JSONArray points = jsonObject.getJSONArray("points");
         for (int i = 0; i < points.length(); i++) {
             JSONObject point = points.getJSONObject(i);
@@ -241,7 +245,13 @@ public class eewfabric implements ModInitializer {
         } else {
             formattedDepth += depth + "km";
         }
-        message.append(dateTime.format(DateTimeFormatter.ofPattern("dd日 HH時mm分"))).append("頃").append("\n").append(hypocenterName.isEmpty() ? "不明" : hypocenterName).append("で最大震度").append(convertScale(maxScale)).append("を観測する地震が発生しました").append("\n").append(convertTsunamiInfo(domesticTsunami)).append("\n\n");
+        message.append(dateTime.format(DateTimeFormatter.ofPattern("dd日 HH時mm分"))).append("頃")
+                .append("\n")
+                .append(hypocenterName.isEmpty() ? "不明" : hypocenterName)
+                .append("で最大震度").append(convertScale(maxScale)).append("を観測する地震が発生しました")
+                .append("\n")
+                .append(convertTsunamiInfo(domesticTsunami))
+                .append("\n\n");
 
         message.append("震源地: ").append(hypocenterName.isEmpty() ? "不明" : hypocenterName).append("\n");
 
@@ -262,13 +272,18 @@ public class eewfabric implements ModInitializer {
         JSONObject hypocenter = jsonObject.getJSONObject("earthquake").getJSONObject("hypocenter");
         String hypocenterName = hypocenter.getString("name");
         String formattedDepth = "深さ: ";
-        int depth = jsonObject.getJSONObject("earthquake").getJSONObject("hypocenter").getInt("depth");
+        int depth = hypocenter.getInt("depth");
         if (depth == 0) {
             formattedDepth += "ごく浅い";
         } else {
             formattedDepth += depth + "km";
         }
-        message.append(dateTime.format(DateTimeFormatter.ofPattern("dd日 HH時mm分"))).append("頃、").append(hypocenterName.isEmpty() ? "不明" : hypocenterName).append("で地震がありました。").append("\n").append(convertTsunamiInfo(domesticTsunami)).append("\n\n");
+        message.append(dateTime.format(DateTimeFormatter.ofPattern("dd日 HH時mm分"))).append("頃、")
+                .append(hypocenterName.isEmpty() ? "不明" : hypocenterName)
+                .append("で地震がありました。")
+                .append("\n")
+                .append(convertTsunamiInfo(domesticTsunami))
+                .append("\n\n");
 
         message.append("震源地: ").append(hypocenterName.isEmpty() ? "不明" : hypocenterName).append("\n");
 
@@ -287,7 +302,10 @@ public class eewfabric implements ModInitializer {
         String domesticTsunami = jsonObject.getJSONObject("earthquake").getString("domesticTsunami");
         JSONObject hypocenter = jsonObject.getJSONObject("earthquake").getJSONObject("hypocenter");
         String hypocenterName = hypocenter.getString("name");
-        message.append(dateTime.format(DateTimeFormatter.ofPattern("dd日 HH時mm分"))).append("頃、海外で強い地震がありました。").append("\n").append(convertTsunamiInfo(domesticTsunami)).append("\n\n");
+        message.append(dateTime.format(DateTimeFormatter.ofPattern("dd日 HH時mm分"))).append("頃、海外で強い地震がありました。")
+                .append("\n")
+                .append(convertTsunamiInfo(domesticTsunami))
+                .append("\n\n");
 
         message.append("震源地: ").append(hypocenterName.isEmpty() ? "不明" : hypocenterName).append("\n");
         message.append("マグニチュード: ").append("M").append(hypocenter.getDouble("magnitude"));
@@ -323,18 +341,15 @@ public class eewfabric implements ModInitializer {
     }
 
     private void reconnectWebSocket(String reason, String type) {
-        try {
-            System.out.println(type + " WebSocket disconnected. Reconnect in 5 seconds:" + reason);
-            broadcastToChat(type + " WebSocketが切断されました。5秒後に再接続します:" + reason);
-            Thread.sleep(5000);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-        if ("EEW".equals(type)) {
-            connectEEWWebSocket();
-        } else if ("P2P".equals(type)) {
-            connectP2PWebSocket();
-        }
+        System.out.println(type + " WebSocket disconnected. Reconnect in 5 seconds: " + reason);
+        broadcastToChat(type + " WebSocketが切断されました。5秒後に再接続します: " + reason);
+        scheduler.schedule(() -> {
+            if ("EEW".equals(type)) {
+                connectEEWWebSocket();
+            } else if ("P2P".equals(type)) {
+                connectP2PWebSocket();
+            }
+        }, 5, TimeUnit.SECONDS);
     }
 
     private void broadcastToChat(String message) {

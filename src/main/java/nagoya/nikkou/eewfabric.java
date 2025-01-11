@@ -21,13 +21,13 @@ public class eewfabric implements ModInitializer {
 
     @Override
     public void onInitialize() {
-        client = new OkHttpClient();
         ServerLifecycleEvents.SERVER_STARTING.register(this::onServerStarting);
         ServerLifecycleEvents.SERVER_STOPPING.register(this::onServerStopping);
     }
 
     private void onServerStarting(MinecraftServer server) {
         this.server = server;
+        client = new OkHttpClient();
         connectEEWWebSocket();
         connectP2PWebSocket();
     }
@@ -35,6 +35,11 @@ public class eewfabric implements ModInitializer {
     private void onServerStopping(MinecraftServer server) {
         closeWebSocket(eewWebSocket, "EEW");
         closeWebSocket(p2pWebSocket, "P2P");
+        if (client != null) {
+            client.dispatcher().executorService().shutdown();
+            client.connectionPool().evictAll();
+            client = null;
+        }
         scheduler.shutdown();
     }
 
@@ -45,18 +50,27 @@ public class eewfabric implements ModInitializer {
         }
     }
 
+    private WebSocket connectWebSocket(String url, WebSocketListener listener, String type) {
+        Request request = new Request.Builder().url(url).build();
+        WebSocket socket = client.newWebSocket(request, listener);
+        System.out.println(type + " WebSocket connecting to " + url);
+        return socket;
+    }
+
     private void connectEEWWebSocket() {
-        Request request = new Request.Builder()
-                .url("wss://ws-api.wolfx.jp/jma_eew")
-                .build();
-        eewWebSocket = client.newWebSocket(request, new EEWWebSocketListener());
+        eewWebSocket = connectWebSocket(
+                "wss://ws-api.wolfx.jp/jma_eew",
+                new EEWWebSocketListener(),
+                "EEW"
+        );
     }
 
     private void connectP2PWebSocket() {
-        Request request = new Request.Builder()
-                .url("https://api.p2pquake.net/v2/ws")
-                .build();
-        p2pWebSocket = client.newWebSocket(request, new P2PWebSocketListener());
+        p2pWebSocket = connectWebSocket(
+                "https://api.p2pquake.net/v2/ws",
+                new P2PWebSocketListener(),
+                "P2P"
+        );
     }
 
     private class EEWWebSocketListener extends WebSocketListener {
@@ -87,13 +101,13 @@ public class eewfabric implements ModInitializer {
         }
 
         @Override
-        public void onFailure(WebSocket webSocket, Throwable t, Response response) {
-            handleWebSocketFailure(webSocket, t, "EEW");
+        public void onClosed(WebSocket webSocket, int code, String reason) {
+            handleWebSocketClosed(webSocket, code, reason, "EEW");
         }
 
         @Override
-        public void onClosed(WebSocket webSocket, int code, String reason) {
-            handleWebSocketClosed(webSocket, code, reason, "EEW");
+        public void onFailure(WebSocket webSocket, Throwable t, Response response) {
+            handleWebSocketFailure(webSocket, t, "EEW");
         }
     }
 
@@ -124,18 +138,27 @@ public class eewfabric implements ModInitializer {
         }
 
         @Override
-        public void onFailure(WebSocket webSocket, Throwable t, Response response) {
-            handleWebSocketFailure(webSocket, t, "P2P");
+        public void onClosed(WebSocket webSocket, int code, String reason) {
+            handleWebSocketClosed(webSocket, code, reason, "P2P");
         }
 
         @Override
-        public void onClosed(WebSocket webSocket, int code, String reason) {
-            handleWebSocketClosed(webSocket, code, reason, "P2P");
+        public void onFailure(WebSocket webSocket, Throwable t, Response response) {
+            handleWebSocketFailure(webSocket, t, "P2P");
         }
     }
 
     private void handleWebSocketClosing(WebSocket webSocket, int code, String reason, String type) {
         System.out.println(type + " WebSocket connection closing: " + reason);
+        broadcastToChat(type + " WebSocketがクローズされました: " + reason);
+    }
+
+    private void handleWebSocketClosed(WebSocket webSocket, int code, String reason, String type) {
+        if (server == null) {
+            System.out.println(type + " WebSocket closed. Not reconnecting");
+            return;
+        }
+        System.out.println(type + " WebSocket closed: " + reason);
         broadcastToChat(type + " WebSocketがクローズされました: " + reason);
     }
 
@@ -145,14 +168,17 @@ public class eewfabric implements ModInitializer {
         reconnectWebSocket("WebSocket Error: " + t.getMessage(), type);
     }
 
-    private void handleWebSocketClosed(WebSocket webSocket, int code, String reason, String type) {
-        if (server == null) {
-            System.out.println(type + " WebSocket closed. Not reconnecting");
-            return;
-        }
+    private void reconnectWebSocket(String reason, String type) {
+        System.out.println(type + " WebSocket disconnected. Reconnect in 5 seconds: " + reason);
+        broadcastToChat(type + " WebSocketが切断されました。5秒後に再接続します: " + reason);
 
-        System.out.println(type + " WebSocket closed: " + reason);
-        broadcastToChat(type + " WebSocketがクローズされました: " + reason);
+        scheduler.schedule(() -> {
+            if ("EEW".equals(type)) {
+                connectEEWWebSocket();
+            } else if ("P2P".equals(type)) {
+                connectP2PWebSocket();
+            }
+        }, 5, TimeUnit.SECONDS);
     }
 
     private String createEEWMessage(JSONObject jsonObject) {
@@ -160,8 +186,7 @@ public class eewfabric implements ModInitializer {
         String originTime = jsonObject.getString("OriginTime");
         LocalDateTime dateTime = LocalDateTime.parse(originTime, DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss"));
 
-        String title = jsonObject.getString("Title");
-        title += " 第" + jsonObject.getInt("Serial") + "報";
+        String title = jsonObject.getString("Title") + " 第" + jsonObject.getInt("Serial") + "報";
 
         if (jsonObject.getBoolean("isCancel")) {
             title += " (キャンセル)";
@@ -256,7 +281,7 @@ public class eewfabric implements ModInitializer {
         message.append("震源地: ").append(hypocenterName.isEmpty() ? "不明" : hypocenterName).append("\n");
 
         JSONObject hypocenter = jsonObject.getJSONObject("earthquake").getJSONObject("hypocenter");
-        message.append("マグニチュード: ").append("M").append(hypocenter.getDouble("magnitude")).append("\n");
+        message.append("マグニチュード: M").append(hypocenter.getDouble("magnitude")).append("\n");
         message.append(formattedDepth);
 
         return message.toString();
@@ -286,8 +311,7 @@ public class eewfabric implements ModInitializer {
                 .append("\n\n");
 
         message.append("震源地: ").append(hypocenterName.isEmpty() ? "不明" : hypocenterName).append("\n");
-
-        message.append("マグニチュード: ").append("M").append(hypocenter.getDouble("magnitude")).append("\n");
+        message.append("マグニチュード: M").append(hypocenter.getDouble("magnitude")).append("\n");
         message.append(formattedDepth);
 
         return message.toString();
@@ -302,13 +326,15 @@ public class eewfabric implements ModInitializer {
         String domesticTsunami = jsonObject.getJSONObject("earthquake").getString("domesticTsunami");
         JSONObject hypocenter = jsonObject.getJSONObject("earthquake").getJSONObject("hypocenter");
         String hypocenterName = hypocenter.getString("name");
-        message.append(dateTime.format(DateTimeFormatter.ofPattern("dd日 HH時mm分"))).append("頃、海外で強い地震がありました。")
+
+        message.append(dateTime.format(DateTimeFormatter.ofPattern("dd日 HH時mm分")))
+                .append("頃、海外で強い地震がありました。")
                 .append("\n")
                 .append(convertTsunamiInfo(domesticTsunami))
                 .append("\n\n");
 
         message.append("震源地: ").append(hypocenterName.isEmpty() ? "不明" : hypocenterName).append("\n");
-        message.append("マグニチュード: ").append("M").append(hypocenter.getDouble("magnitude"));
+        message.append("マグニチュード: M").append(hypocenter.getDouble("magnitude"));
 
         return message.toString();
     }
@@ -338,18 +364,6 @@ public class eewfabric implements ModInitializer {
             case "Warning": return "この地震により津波警報等を発表しています";
             default: return tsunami;
         }
-    }
-
-    private void reconnectWebSocket(String reason, String type) {
-        System.out.println(type + " WebSocket disconnected. Reconnect in 5 seconds: " + reason);
-        broadcastToChat(type + " WebSocketが切断されました。5秒後に再接続します: " + reason);
-        scheduler.schedule(() -> {
-            if ("EEW".equals(type)) {
-                connectEEWWebSocket();
-            } else if ("P2P".equals(type)) {
-                connectP2PWebSocket();
-            }
-        }, 5, TimeUnit.SECONDS);
     }
 
     private void broadcastToChat(String message) {
